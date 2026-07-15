@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Sarabun", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --color-brand-cyan: #06b6d4;
+  --color-brand-purple: #a855f7;
+  --color-brand-blue: #3b82f6;
+  --color-brand-dark: #0b0f19;
+}
+
+@layer utilities {
+  /* Shine light effect across glassy container */
+  .shine-effect {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .shine-effect::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -100%;
+    width: 30%;
+    height: 200%;
+    background: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.15) 30%,
+      rgba(255, 255, 255, 0.35) 50%,
+      rgba(255, 255, 255, 0.15) 70%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(25deg);
+    animation: shine-animation 4.5s infinite ease-in-out;
+  }
+
+  @keyframes shine-animation {
+    0% {
+      left: -100%;
+    }
+    18% {
+      left: 140%;
+    }
+    100% {
+      left: 140%;
+    }
+  }
+
+  /* Glassmorphism panel */
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-panel-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .glass-panel-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px -10px rgba(6, 182, 212, 0.3);
+    border-color: rgba(6, 182, 212, 0.4);
+  }
+
+  /* Ambient background */
+  .ambient-bg {
+    background-color: #0a0a0c;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.1) 0px, transparent 40%),
+      radial-gradient(at 50% 0%, rgba(168, 85, 247, 0.08) 0px, transparent 40%),
+      radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.1) 0px, transparent 40%),
+      radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.06) 0px, transparent 40%);
+    background-attachment: fixed;
+  }
+}
+
