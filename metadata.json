@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "E-Learning: การออกแบบและสร้าง Chat Bot",
+  "description": "ระบบบทเรียนออนไลน์และเกมการเรียนรู้ วิชาการออกแบบและพัฒนา Chat Bot สำหรับนักศึกษา ปวช.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -58,6 +58,11 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingText, setLoadingText] = useState<string>("");
 
+  // Controlled login input state
+  const [loginName, setLoginName] = useState<string>("");
+  const [loginRole, setLoginRole] = useState<UserRole>("student");
+  const [loginError, setLoginError] = useState<string>("");
+
   // Quiz active index & timer
   const [quizMode, setQuizMode] = useState<"pre" | "post" | null>(null);
   const [currentQuizIndex, setCurrentQuizIndex] = useState<number>(0);
@@ -199,7 +204,9 @@ export default function App() {
 
   // Handle Login
   const handleLogin = async (name: string, role: UserRole) => {
-    if (!name.trim()) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setLoginError("กรุณาระบุ ชื่อ-นามสกุล ของท่านเพื่อเข้าเรียน");
       Swal.fire({
         title: "กรุณากรอกข้อมูล",
         text: "กรุณาระบุ ชื่อ-นามสกุล ของท่านเพื่อเข้าเรียน",
@@ -211,53 +218,68 @@ export default function App() {
       return;
     }
 
+    setLoginError("");
     setLoading(true);
-    setLoadingText("กำลังยืนยันตัวตน...");
+    setLoadingText("กำลังเข้าสู่ระบบ...");
 
-    const newId = "user_" + Math.random().toString(36).substring(2, 9);
-    const userPayload = { id: newId, name: name.trim(), role };
+    // Consistent ID per student name to preserve individual progress
+    const existingId = localStorage.getItem(`chatbot_uid_${trimmed}`);
+    const userId = existingId || "user_" + Math.random().toString(36).substring(2, 9);
+    localStorage.setItem(`chatbot_uid_${trimmed}`, userId);
+
+    const userPayload = { id: userId, name: trimmed, role };
     
-    // Check if this student already has records in local state
-    const savedPre = localStorage.getItem(`chatbot_pre_${newId}`);
-    const savedPost = localStorage.getItem(`chatbot_post_${newId}`);
-    
-    const initialStatus = savedPre !== null ? "learning" : "not_started";
-    
+    // Check if this student already has records in local storage
+    const savedPre = localStorage.getItem(`chatbot_pre_${userId}`);
+    const savedPost = localStorage.getItem(`chatbot_post_${userId}`);
+    const savedStatus = (localStorage.getItem(`chatbot_status_${userId}`) as LearningStatus) ||
+      (savedPost !== null ? "completed" : savedPre !== null ? "learning" : "not_started");
+
+    // Instantly activate user session!
+    setCurrentUser(userPayload);
+    setLearningStatus(savedStatus);
+    localStorage.setItem("chatbot_user", JSON.stringify(userPayload));
+
+    if (savedPre !== null) {
+      setPreTestScore(JSON.parse(savedPre));
+      setPreTestDone(true);
+    }
+    if (savedPost !== null) {
+      setPostTestScore(JSON.parse(savedPost));
+      setPostTestDone(true);
+    }
+
+    Swal.fire({
+      title: "ยินดีต้อนรับ!",
+      text: `ยินดีต้อนรับคุณ ${trimmed} เข้าสู่บทเรียนการออกแบบและสร้าง Chat Bot`,
+      icon: "success",
+      timer: 1800,
+      timerProgressBar: true,
+      background: "#0d131e",
+      color: "#f8fafc",
+      confirmButtonColor: "#06b6d4"
+    });
+
+    // Notify backend
     try {
-      const response = await fetch("/api/log", {
+      await fetch("/api/log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "login",
-          id: newId,
-          name: name.trim(),
+          id: userId,
+          name: trimmed,
           role,
-          learningStatus: initialStatus,
+          learningStatus: savedStatus,
           preTestScore: savedPre ? `${savedPre}/5` : "-",
           postTestScore: savedPost ? `${savedPost}/5` : "-",
           developmentResult: "เข้าสู่ระบบการเรียน",
           timestamp: new Date().toISOString()
         })
       });
-      
-      if (response.ok) {
-        setCurrentUser(userPayload);
-        setLearningStatus(initialStatus as LearningStatus);
-        localStorage.setItem("chatbot_user", JSON.stringify(userPayload));
-        
-        Swal.fire({
-          title: "ยินดีต้อนรับ!",
-          text: `ยินดีต้อนรับคุณ ${name.trim()} เข้าสู่บทเรียนการออกแบบและสร้าง Chat Bot`,
-          icon: "success",
-          background: "#0d131e",
-          color: "#f8fafc",
-          confirmButtonColor: "#06b6d4"
-        });
-        
-        fetchLeaderboard();
-      }
+      fetchLeaderboard();
     } catch (err) {
-      console.error(err);
+      console.warn("Backend log notice:", err);
     } finally {
       setLoading(false);
     }
@@ -643,10 +665,7 @@ export default function App() {
             
             <form onSubmit={(e) => {
               e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const name = formData.get("name") as string;
-              const role = formData.get("role") as UserRole;
-              handleLogin(name, role);
+              handleLogin(loginName, loginRole);
             }}>
               <div className="space-y-5">
                 <div>
@@ -654,46 +673,88 @@ export default function App() {
                   <input 
                     name="name"
                     type="text" 
+                    value={loginName}
+                    onChange={(e) => {
+                      setLoginName(e.target.value);
+                      if (loginError) setLoginError("");
+                    }}
                     placeholder="เช่น สมชาย มีความสุข" 
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-slate-100 placeholder-gray-600 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all"
-                    required
+                    className={`w-full bg-black/40 border ${loginError ? "border-rose-500 ring-1 ring-rose-500" : "border-white/10"} rounded-xl px-4 py-3 text-slate-100 placeholder-gray-600 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all`}
                   />
+                  {loginError && (
+                    <p className="text-xs text-rose-400 mt-1.5 flex items-center gap-1 font-medium">
+                      <span>⚠️</span> {loginError}
+                    </p>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">บทบาทผู้ใช้งาน</label>
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="relative flex items-center justify-center p-3 rounded-xl border border-white/10 bg-white/5 cursor-pointer hover:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
-                      <input 
-                        type="radio" 
-                        name="role" 
-                        value="student" 
-                        defaultChecked 
-                        className="sr-only peer"
-                      />
-                      <span className="peer-checked:text-cyan-400 font-semibold text-sm text-gray-400">นักศึกษา ปวช.</span>
-                      <div className="absolute inset-0 rounded-xl border-2 border-transparent peer-checked:border-cyan-500 pointer-events-none transition-all"></div>
-                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setLoginRole("student")}
+                      className={`relative flex items-center justify-center p-3 rounded-xl border transition-all cursor-pointer ${loginRole === "student" ? "border-cyan-500 bg-cyan-500/10 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)] font-semibold" : "border-white/10 bg-white/5 text-gray-400 hover:border-cyan-500/50"}`}
+                    >
+                      <span className="text-sm">นักศึกษา ปวช.</span>
+                    </button>
 
-                    <label className="relative flex items-center justify-center p-3 rounded-xl border border-white/10 bg-white/5 cursor-pointer hover:border-purple-500/50 focus-within:ring-1 focus-within:ring-purple-400 transition-all">
-                      <input 
-                        type="radio" 
-                        name="role" 
-                        value="admin" 
-                        className="sr-only peer"
-                      />
-                      <span className="peer-checked:text-purple-400 font-semibold text-sm text-gray-400">ผู้ดูแลระบบ</span>
-                      <div className="absolute inset-0 rounded-xl border-2 border-transparent peer-checked:border-purple-500 pointer-events-none transition-all"></div>
-                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setLoginRole("admin")}
+                      className={`relative flex items-center justify-center p-3 rounded-xl border transition-all cursor-pointer ${loginRole === "admin" ? "border-purple-500 bg-purple-500/10 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.25)] font-semibold" : "border-white/10 bg-white/5 text-gray-400 hover:border-purple-500/50"}`}
+                    >
+                      <span className="text-sm">ผู้ดูแลระบบ</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Selection Presets */}
+                <div className="pt-1">
+                  <p className="text-[11px] text-gray-400 mb-1.5 font-medium">ตัวอย่างเพื่อทดสอบเข้าใช้งานทันที:</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginName("สมชาย มีความสุข");
+                        setLoginRole("student");
+                        setLoginError("");
+                      }}
+                      className="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-800/80 text-cyan-300 hover:bg-slate-700 hover:text-cyan-200 border border-slate-700/60 cursor-pointer transition flex items-center gap-1"
+                    >
+                      <span>👤</span> สมชาย (นักศึกษา)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginName("อาจารย์ผู้สอน");
+                        setLoginRole("admin");
+                        setLoginError("");
+                      }}
+                      className="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-800/80 text-purple-300 hover:bg-slate-700 hover:text-purple-200 border border-slate-700/60 cursor-pointer transition flex items-center gap-1"
+                    >
+                      <span>🛡️</span> อาจารย์ผู้สอน (Admin)
+                    </button>
                   </div>
                 </div>
 
                 <button 
                   type="submit" 
-                  className="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-3.5 px-6 rounded-2xl shadow-[0_0_15px_rgba(6,182,212,0.4)] transition duration-200 transform hover:scale-[1.01] flex items-center justify-center gap-2 group cursor-pointer"
+                  disabled={loading}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleLogin(loginName, loginRole);
+                  }}
+                  className="w-full bg-cyan-500 hover:bg-cyan-400 active:scale-[0.99] disabled:opacity-70 text-black font-bold py-3.5 px-6 rounded-2xl shadow-[0_0_15px_rgba(6,182,212,0.4)] transition duration-200 transform hover:scale-[1.01] flex items-center justify-center gap-2 group cursor-pointer"
                 >
-                  เข้าสู่ระบบ
-                  <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                  {loading ? (
+                    <span>กำลังเข้าสู่ระบบ...</span>
+                  ) : (
+                    <>
+                      <span>เข้าสู่ระบบ</span>
+                      <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
                 </button>
               </div>
             </form>

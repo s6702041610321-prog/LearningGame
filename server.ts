@@ -64,8 +64,12 @@ app.get("/api/leaderboard", async (req, res) => {
     if (response.ok) {
       const result = await response.json();
       if (result && result.status === "success" && Array.isArray(result.data)) {
+        // Filter out header row from Google Sheets if returned
+        const cleanedData = result.data.filter((item: any) => 
+          item && item.name && item.name !== "ชื่อ-นามสกุล" && item.id !== "ID"
+        );
         // Merge local active logs to sheet results to show real-time stats
-        const merged = [...result.data];
+        const merged = [...cleanedData];
         localLogs.forEach(local => {
           if (!merged.some(m => m.id === local.id)) {
             merged.push(local);
@@ -136,30 +140,32 @@ app.post("/api/log", async (req, res) => {
     localLogs.push(formattedLog);
   }
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+  // Return response immediately to prevent frontend login / activity blocking
+  res.json({ status: "success", source: "local_memory", message: "Saved in backend state" });
 
-    const response = await fetch(GAS_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
+  // Sync to Google Apps Script in background without blocking client response
+  fetch(GAS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(5000)
+  })
+    .then(async (response) => {
+      if (response.ok) {
+        try {
+          const result = await response.json();
+          console.log("Background GAS sync succeeded:", result);
+        } catch (e) {
+          // Response may be text/html redirect
+          console.log("Background GAS sync received response");
+        }
+      }
+    })
+    .catch((err) => {
+      console.warn("Background GAS Sheet sync notice:", err.message || err);
     });
-
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const result = await response.json();
-      return res.json({ status: "success", source: "sheets", data: result });
-    }
-    throw new Error("GAS endpoint failed");
-  } catch (err) {
-    console.warn("GAS Sheet logging failed, saved to backend local state memory:", err);
-    return res.json({ status: "success", source: "local_memory", message: "Saved in backend state" });
-  }
 });
 
 // Serve frontend SPA
